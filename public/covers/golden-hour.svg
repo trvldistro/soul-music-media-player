@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="640" viewBox="0 0 640 640">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#ffcf87"/>
+      <stop offset="45%" stop-color="#f79d45"/>
+      <stop offset="100%" stop-color="#8e2f0e"/>
+    </linearGradient>
+    <clipPath id="sunClip"><circle cx="320" cy="300" r="140"/></clipPath>
+    <filter id="grain">
+      <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" stitchTiles="stitch"/>
+      <feColorMatrix type="matrix" values="0 0 0 0 1  0 0 0 0 0.85  0 0 0 0 0.6  0 0 0 0.08 0"/>
+    </filter>
+  </defs>
+  <rect width="640" height="640" fill="url(#bg)"/>
+  <circle cx="320" cy="300" r="140" fill="#fff1d6" opacity="0.92"/>
+  <g clip-path="url(#sunClip)" stroke="#f79d45" stroke-width="7">
+    <line x1="150" y1="330" x2="500" y2="330"/>
+    <line x1="150" y1="356" x2="500" y2="356"/>
+    <line x1="150" y1="382" x2="500" y2="382" stroke-width="6"/>
+    <line x1="150" y1="408" x2="500" y2="408" stroke-width="5"/>
+    <line x1="150" y1="432" x2="500" y2="432" stroke-width="4"/>
+  </g>
+  <text x="320" y="530" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-size="56" fill="#3d1204" letter-spacing="3">Golden Hour</text>
+  <text x="320" y="568" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-size="20" fill="#5c2410" letter-spacing="12">MARLENA RAY</text>
+  <text x="320" y="608" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-size="14" fill="#6e3a1c" letter-spacing="6">SOUL MUSIC · SMR-003</text>
+  <rect width="640" height="640" filter="url(#grain)"/>
+</svg>
