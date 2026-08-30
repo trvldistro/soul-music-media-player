@@ -58,7 +58,10 @@ export function ClaimArtistDialog({ artistName, reclaim = false, onOpenChange }:
             toast.error(result.userMessage || "Could not submit the claim. Try again.");
           }
         },
-        onError: () => toast.error("Could not submit the claim. Try again."),
+        onError: (err) =>
+          toast.error(
+            err instanceof Error && err.message ? err.message : "Could not submit the claim. Try again.",
+          ),
       },
     );
   }

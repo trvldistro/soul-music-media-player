@@ -26,11 +26,22 @@ export interface AdminArtistRecord {
   plays: number;
 }
 
+export interface AdminClaimRecord {
+  rowId: number;
+  name: string;
+  evidence: string;
+  link: string;
+  claimantUuid: string;
+  claimantEmail: string;
+  createdAt: number;
+}
+
 export interface AdminSnapshot {
   users: AdminUserRecord[];
   bans: AdminBanRecord[];
   usersError: string;
   artists: AdminArtistRecord[];
+  claims: AdminClaimRecord[];
 }
 
 export type AdminActionName =
@@ -58,6 +69,7 @@ export async function fetchAdminSnapshot(): Promise<AdminSnapshot> {
     bans: Array.isArray(data.bans) ? (data.bans as AdminBanRecord[]) : [],
     usersError: typeof data.usersError === "string" ? data.usersError : "",
     artists: Array.isArray(data.artists) ? (data.artists as AdminArtistRecord[]) : [],
+    claims: Array.isArray(data.claims) ? (data.claims as AdminClaimRecord[]) : [],
   };
 }
 

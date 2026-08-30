@@ -44,7 +44,7 @@ import {
   type AdminActionName,
   type AdminUserRecord,
 } from "@/lib/adminApi";
-import { useAllLyrics, useArtists, useModerationTracks } from "@/lib/queries";
+import { useAllLyrics, useModerationTracks } from "@/lib/queries";
 import { formatDuration, formatPlayCount } from "@/lib/format";
 import { songCode } from "@/lib/songCode";
 import type { Track } from "@/lib/types";
@@ -145,7 +145,6 @@ function AdminConsole() {
   const [resetTarget, setResetTarget] = useState<AdminUserRecord | null>(null);
 
   const tracksQ = useModerationTracks();
-  const artistsQ = useArtists({ refetchIntervalMs: tab === "claims" ? 4000 : undefined });
   const lyricsQ = useAllLyrics();
   const snapshotQ = useQuery({
     queryKey: ["adminSnapshot"],
@@ -177,10 +176,7 @@ function AdminConsole() {
     [tracks],
   );
 
-  const pendingClaims = useMemo(
-    () => (artistsQ.data ?? []).filter((a) => a.status === "pending"),
-    [artistsQ.data],
-  );
+  const pendingClaims = snapshotQ.data?.claims ?? [];
   const queue = useMemo(
     () => tracks.filter((t) => t.moderationStatus === "unverified"),
     [tracks],
@@ -211,6 +207,7 @@ function AdminConsole() {
   const refresh = () => {
     void qc.invalidateQueries({ queryKey: ["tracks"] });
     void qc.invalidateQueries({ queryKey: ["artists"] });
+    void qc.invalidateQueries({ queryKey: ["artistClaims"] });
     void qc.refetchQueries({ queryKey: ["adminSnapshot"] });
   };
 

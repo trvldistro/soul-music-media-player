@@ -41,7 +41,7 @@ export function NowPlaying({ open, onClose, signedIn, onAddLyrics }: NowPlayingP
     .filter(({ track, orderPosition }) => track && orderPosition >= p.pos);
 
   return (
-    <div className="fixed inset-0 z-50 animate-in fade-in overflow-y-auto duration-300">
+    <div className="fixed inset-0 z-50 overflow-y-auto animate-in fade-in slide-in-from-bottom duration-300">
       {/* Backdrop from the cover */}
       <div className="pointer-events-none absolute inset-0">
         {t.coverUrl && (

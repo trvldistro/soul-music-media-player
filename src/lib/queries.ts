@@ -4,9 +4,8 @@ import db from "@/lib/shared/kliv-database.js";
 import {
   attach_track_video,
   edit_track_once,
-  reclaim_artist,
-  submit_artist_claim,
 } from "@/lib/commands";
+import functions from "@/lib/shared/kliv-functions.js";
 
 import { parseLines, serializeLines, type LyricLine } from "./lyrics";
 import { trackIsVisible, isPastPurgeDeadline } from "./admin";
@@ -14,7 +13,9 @@ import { awardSoulPoints } from "./soulPoints";
 import { findArtistMatch } from "./artistMatch";
 import { attachRejectionMessage } from "./mediaMatch";
 import { ensureArtistProfile } from "./plays";
-import { mapArtist, mapLyrics, mapTrack } from "./types";
+import { mapArtist, mapArtistExtra, mapLyrics, mapTrack } from "./types";
+import { sanitizeBio, sanitizeLinks, serializeLinks } from "./artistProfile";
+import type { ArtistLink } from "./artistProfile";
 import type {
   ArtistProfile,
   MediaKind,
@@ -350,18 +351,128 @@ export function useSubmitArtistClaim() {
       name,
       evidence,
       link,
-      reclaim,
     }: {
       name: string;
       evidence: string;
       link: string;
       reclaim?: boolean;
-    }) =>
-      reclaim
-        ? reclaim_artist({ name, claim_evidence: evidence, claim_link: link })
-        : submit_artist_claim({ name, claim_evidence: evidence, claim_link: link }),
+    }) => {
+      try {
+        await functions.post("file_claim", { name, evidence, link });
+        return { outcome: "succeeded" as const };
+      } catch (e) {
+        const err = e as { details?: { message?: string }; message?: string };
+        const message = err?.details?.message || err?.message || "Could not submit the claim. Try again.";
+        if (/already/i.test(message)) {
+          return { outcome: "rejected" as const, code: "Conflict", userMessage: message };
+        }
+        throw new Error(message);
+      }
+    },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["artists"] });
+      void qc.invalidateQueries({ queryKey: ["artistClaims"] });
+      void qc.refetchQueries({ queryKey: ["adminSnapshot"] });
+    },
+  });
+}
+
+export interface ArtistClaim {
+  rowId: number;
+  name: string;
+  evidence: string;
+  link: string;
+  status: "pending" | "approved" | "rejected";
+  claimantUuid: string | null;
+  createdAt: number;
+}
+
+interface ArtistClaimRow {
+  _row_id: number;
+  name: string;
+  evidence?: string | null;
+  link?: string | null;
+  status?: string | null;
+  _created_by?: string | null;
+  _created_at?: number | null;
+}
+
+/** Claim applications, so artist pages can show "under review" state. */
+export function useArtistClaims(options?: { refetchIntervalMs?: number }) {
+  return useQuery<ArtistClaim[]>({
+    queryKey: ["artistClaims"],
+    queryFn: async () => {
+      const rows = (await db.query("artist_claims", { order: "_created_at.asc" })) as unknown as ArtistClaimRow[];
+      return rows.map((r) => ({
+        rowId: r._row_id,
+        name: r.name,
+        evidence: r.evidence ?? "",
+        link: r.link ?? "",
+        status: r.status === "approved" ? "approved" : r.status === "rejected" ? "rejected" : "pending",
+        claimantUuid: r._created_by ?? null,
+        createdAt: Number(r._created_at) || 0,
+      }));
+    },
+    refetchInterval: options?.refetchIntervalMs ?? false,
+  });
+}
+
+// ── Artist profile extras (bio, photo, links) ─────────────────────────────
+
+interface ArtistExtraRow {
+  _row_id: number;
+  name: string;
+  bio?: string | null;
+  image_url?: string | null;
+  links_json?: string | null;
+  _created_by?: string | null;
+}
+
+/** Every artist profile row. Only the verified claimant's row ever displays. */
+export function useArtistExtras(options?: { refetchIntervalMs?: number }) {
+  return useQuery<ReturnType<typeof mapArtistExtra>[]>({
+    queryKey: ["artistExtras"],
+    queryFn: async () => {
+      const rows = (await db.query("artist_profiles", { order: "_created_at.asc" })) as unknown as ArtistExtraRow[];
+      return rows.map(mapArtistExtra);
+    },
+    refetchInterval: options?.refetchIntervalMs ?? false,
+  });
+}
+
+/** Saves the signed-in artist's own profile extras (bio, photo, links). */
+export function useSaveArtistProfile() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      name,
+      bio,
+      imageUrl,
+      links,
+      userId,
+    }: {
+      name: string;
+      bio: string;
+      imageUrl: string;
+      links: ArtistLink[];
+      userId: string | null;
+    }) => {
+      if (!userId) throw new Error("Sign in to edit your profile.");
+      const rows = (await db.query("artist_profiles", {})) as unknown as ArtistExtraRow[];
+      const mine = rows.find((r) => r.name === name && r._created_by === userId);
+      const data = {
+        bio: sanitizeBio(bio),
+        image_url: imageUrl,
+        links_json: serializeLinks(sanitizeLinks(links)),
+      };
+      if (mine) {
+        await db.update("artist_profiles", { _row_id: `eq.${mine._row_id}` }, data);
+      } else {
+        await db.insertOne("artist_profiles", { name, ...data });
+      }
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["artistExtras"] });
     },
   });
 }

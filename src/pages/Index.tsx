@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { Heart, Home, ListMusic, LogIn, Plus, Search, SearchX, ShieldCheck, Smartphone } from "lucide-react";
+import { Heart, Home, Menu, Plus, Search, SearchX } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/hooks/useAuth";
@@ -16,22 +16,23 @@ import {
 import { filterByGenre, groupAlbums, matchesQuery, featuredAlbum, uniqueGenres, type Album } from "@/lib/tracks";
 import { canEditTrack } from "@/lib/trackEdit";
 import { isAdminEmail } from "@/lib/admin";
-import type { Track } from "@/lib/types";
-import { AppSidebar, SoulLogo, type View } from "@/components/AppSidebar";
+import { selectArtistExtra } from "@/lib/artistProfile";
+import type { ArtistProfile, Track } from "@/lib/types";
+import { AppSidebar, type View } from "@/components/AppSidebar";
 import { HomeView } from "@/components/HomeView";
 import { PlaylistsView, PlaylistDetail } from "@/components/PlaylistsView";
 import { TrackRow } from "@/components/TrackRow";
 import { PlayerBar } from "@/components/PlayerBar";
 import { NowPlaying } from "@/components/NowPlaying";
+import { MobileNav } from "@/components/MobileNav";
 import { UploadDialog } from "@/components/UploadDialog";
 import { EditTrackDialog } from "@/components/EditTrackDialog";
 import { ArtistView } from "@/components/ArtistView";
 import { ClaimArtistDialog } from "@/components/ClaimArtistDialog";
 import { LyricsEditorDialog } from "@/components/LyricsEditorDialog";
-import { useArtists, useSoulPoints } from "@/lib/queries";
+import { useArtistClaims, useArtistExtras, useArtists, useSoulPoints } from "@/lib/queries";
 import { DeviceLibraryView } from "@/components/DeviceLibraryView";
 import { AddToPlaylistDialog, CreatePlaylistDialog } from "@/components/PlaylistDialogs";
-import { cn } from "@/lib/utils";
 
 export default function Index() {
   return (
@@ -59,6 +60,7 @@ function SoulApp() {
   const [artistName, setArtistName] = useState<string | null>(null);
   const [lyricsTrack, setLyricsTrack] = useState<Track | null>(null);
   const [claimName, setClaimName] = useState<string | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   const tracksQ = useTracks();
   const favoritesQ = useFavorites(signedIn);
@@ -69,6 +71,9 @@ function SoulApp() {
     refetchIntervalMs: view === "artist" ? 4000 : undefined,
   });
   const soulPoints = useSoulPoints(signedIn);
+  // Claim applications + profile extras power the artist pages.
+  const claimsQ = useArtistClaims({ refetchIntervalMs: view === "artist" ? 4000 : undefined });
+  const extrasQ = useArtistExtras({ refetchIntervalMs: view === "artist" ? 4000 : undefined });
   const toggleFavorite = useToggleFavorite();
   const deleteTrack = useDeleteTrack();
 
@@ -79,6 +84,12 @@ function SoulApp() {
   const favorites = favoritesQ.favorites;
   const playlists = playlistsQ.data ?? [];
   const artists = artistsQ.data ?? [];
+  const claims = claimsQ.data ?? [];
+  const extras = extrasQ.data ?? [];
+  const pendingClaimNames = useMemo(
+    () => new Set(claims.filter((c) => c.status === "pending").map((c) => c.name.toLowerCase())),
+    [claims],
+  );
 
   const visibleTracks = useMemo(() => filterByGenre(tracks, genre), [tracks, genre]);
   const favoriteTracks = useMemo(() => tracks.filter((t) => favorites.has(t.rowId)), [tracks, favorites]);
@@ -114,7 +125,7 @@ function SoulApp() {
   );
 
   const currentId = player.current?.rowId ?? null;
-  const currentUserId = (user?.uuid as string | undefined) ?? null;
+  const currentUserId = (user?.userUuid as string | undefined) ?? null;
   const editProps = (track: Track) => ({
     onEdit: canEditTrack(track, currentUserId) ? () => setEditTrack(track) : undefined,
     editUsed: track.createdBy === currentUserId && track.editState === "locked",
@@ -140,6 +151,22 @@ function SoulApp() {
   const handleRemoveTrack = (track: Track) => {
     if (currentId === track.rowId) return;
     deleteTrack.mutate(track.rowId);
+  };
+  // An unclaimed page with a filed application shows as "under review".
+  const claimFor = (name: string): ArtistProfile | null => {
+    const row = artists.find((a) => a.name.toLowerCase() === name.toLowerCase()) ?? null;
+    if ((row?.status ?? "unclaimed") !== "claimed" && pendingClaimNames.has(name.toLowerCase())) {
+      return {
+        rowId: row?.rowId ?? -1,
+        name: row?.name ?? name,
+        status: "pending",
+        claimantUuid: null,
+        claimEvidence: "",
+        claimLink: "",
+        claimedAt: null,
+      };
+    }
+    return row;
   };
 
   const selectedAlbum = albumKey ? albums.find((a) => a.key === albumKey) ?? null : null;
@@ -170,67 +197,45 @@ function SoulApp() {
 
       <div className="min-w-0 flex-1">
         {isMobile && (
-          <header className="glass sticky top-0 z-30 flex items-center gap-1 border-b border-border/70 px-3 py-2">
-            <SoulLogo compact />
-            <div className="flex-1" />
-            {(
-              [
-                { id: "home", label: "Home view", icon: Home },
-                { id: "search", label: "Search view", icon: Search },
-                { id: "favorites", label: "Favorites view", icon: Heart },
-                { id: "playlists", label: "Playlists view", icon: ListMusic },
-                { id: "device", label: "Device storage view", icon: Smartphone },
-              ] as const
-            ).map((item) => {
-              const Icon = item.icon;
-              const active = view === item.id || (item.id === "playlists" && view === "playlist");
-              return (
-                <button
-                  key={item.id}
-                  aria-label={item.label}
-                  aria-current={active ? "page" : undefined}
-                  onClick={() => {
-                    setView(item.id as View);
-                    setPlaylistId(null);
-                  }}
-                  className={cn(
-                    "rounded-full p-2 transition",
-                    active ? "bg-accent text-primary" : "text-muted-foreground hover:text-foreground",
-                  )}
-                >
-                  <Icon className="h-5 w-5" />
-                </button>
-              );
-            })}
-            <button
-              aria-label="Add music"
-              onClick={() => setUploadOpen(true)}
-              className="rounded-full bg-primary p-2 text-primary-foreground"
-            >
-              <Plus className="h-5 w-5" />
-            </button>
-            {!signedIn && (
-              <Link
-                to="/signin?redirect=/"
-                aria-label="Sign in"
-                className="rounded-full p-2 text-muted-foreground transition hover:text-foreground"
+          <>
+            {/* Hamburger + Add-music buttons, stacked top-left */}
+            <div className="fixed top-3 left-3 z-30 flex flex-col gap-2.5">
+              <button
+                type="button"
+                aria-label="Open menu"
+                onClick={() => setMenuOpen(true)}
+                className="flex h-11 w-11 items-center justify-center rounded-full border border-border/70 bg-card/90 text-foreground shadow-lg backdrop-blur transition hover:bg-card"
               >
-                <LogIn className="h-5 w-5" />
-              </Link>
-            )}
-            {isAdminEmail(user?.email as string | undefined) && (
-              <Link
-                to="/admin"
-                aria-label="Admin dashboard"
-                className="rounded-full p-2 text-gold-soft transition hover:text-foreground"
+                <Menu className="h-5 w-5" />
+              </button>
+              <button
+                type="button"
+                aria-label="Add music"
+                onClick={() => setUploadOpen(true)}
+                className="flex h-11 w-11 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg shadow-primary/25 transition hover:scale-105 active:scale-95"
               >
-                <ShieldCheck className="h-5 w-5" />
-              </Link>
-            )}
-          </header>
+                <Plus className="h-5 w-5" />
+              </button>
+            </div>
+            <MobileNav
+              open={menuOpen}
+              onClose={() => setMenuOpen(false)}
+              view={view}
+              onSelectView={(v) => {
+                setView(v);
+                setPlaylistId(null);
+              }}
+              onUpload={() => setUploadOpen(true)}
+              isAdmin={isAdminEmail(user?.email as string | undefined)}
+              signedIn={signedIn}
+              user={user}
+              soulPoints={soulPoints.total}
+              onSignOut={() => void signOut()}
+            />
+          </>
         )}
 
-        <main className="mx-auto w-full max-w-[1400px] px-4 pt-6 pb-40 sm:px-7">
+        <main className="mx-auto w-full max-w-[1400px] px-4 pt-6 pb-40 pl-[4.5rem] sm:px-7 sm:pl-7">
           {view === "home" && selectedAlbum && (
             <AlbumDetail
               album={selectedAlbum}
@@ -455,9 +460,11 @@ function SoulApp() {
             <ArtistView
               name={artistName}
               tracks={tracks}
-              claim={
-                artists.find((a) => a.name.toLowerCase() === artistName.toLowerCase()) ?? null
-              }
+              claim={claimFor(artistName)}
+              extra={selectArtistExtra(
+                extras,
+                claimFor(artistName) ?? { name: artistName, status: "unclaimed", claimantUuid: null },
+              )}
               signedIn={signedIn}
               onClaim={(name) => setClaimName(name)}
               onBack={() => {

@@ -35,27 +35,34 @@ export function PlayerBar({ favorite, canFavorite, onToggleFavorite, onExpand }:
   return (
     <div data-testid="player-bar" className="glass fixed inset-x-0 bottom-0 z-40 border-t border-border/80">
       <div className="mx-auto flex h-[76px] max-w-[1700px] items-center gap-3 px-3 sm:gap-4 sm:px-5">
-        {/* Now playing */}
+        {/* Now playing — tap it to slide up the full player */}
         <div className="flex min-w-0 flex-1 items-center gap-3 md:w-80 md:flex-none">
           {t ? (
             <>
-              {t.coverUrl ? (
-                <img src={t.coverUrl} alt="" className="h-12 w-12 rounded-md object-cover shadow" />
-              ) : (
-                <div className="flex h-12 w-12 items-center justify-center rounded-md bg-secondary">
-                  <Music2 className="h-5 w-5 text-muted-foreground" />
-                </div>
-              )}
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium">{t.title}</p>
-                <p className="truncate text-xs text-muted-foreground">{t.artist}</p>
-              </div>
+              <button
+                type="button"
+                onClick={onExpand}
+                aria-label={`Show ${t.title} in the full player`}
+                className="flex min-w-0 flex-1 items-center gap-3 text-left transition active:opacity-70"
+              >
+                {t.coverUrl ? (
+                  <img src={t.coverUrl} alt="" className="h-12 w-12 shrink-0 rounded-md object-cover shadow" />
+                ) : (
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-md bg-secondary">
+                    <Music2 className="h-5 w-5 text-muted-foreground" />
+                  </div>
+                )}
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm font-medium">{t.title}</span>
+                  <span className="block truncate text-xs text-muted-foreground">{t.artist}</span>
+                </span>
+              </button>
               {canFavorite && onToggleFavorite && (
                 <button
                   aria-label={favorite ? `Unfavorite ${t.title}` : `Favorite ${t.title}`}
                   aria-pressed={favorite}
                   onClick={onToggleFavorite}
-                  className="hidden rounded-full p-2 text-muted-foreground transition hover:bg-secondary hover:text-rose sm:block"
+                  className="hidden rounded-full p-2 text-muted-foreground transition hover:bg-secondary hover:text-rose md:block"
                 >
                   <Heart className={cn("h-4 w-4", favorite && "fill-rose text-rose")} />
                 </button>
@@ -66,7 +73,7 @@ export function PlayerBar({ favorite, canFavorite, onToggleFavorite, onExpand }:
                   aria-pressed={p.videoMode}
                   title={p.videoMode ? "Switch to the song" : "Switch to the video"}
                   onClick={() => p.setVideoMode(!p.videoMode)}
-                  className="hidden rounded-full p-2 text-muted-foreground transition hover:bg-secondary hover:text-gold-soft sm:block"
+                  className="hidden rounded-full p-2 text-muted-foreground transition hover:bg-secondary hover:text-gold-soft md:block"
                 >
                   {p.videoMode ? <Music2 className="h-4 w-4" /> : <Clapperboard className="h-4 w-4" />}
                 </button>
@@ -192,14 +199,16 @@ export function PlayerBar({ favorite, canFavorite, onToggleFavorite, onExpand }:
             />
           </div>
           )}
-          <button
-            aria-label="Open now playing"
-            onClick={onExpand}
-            disabled={!t}
-            className="rounded-full p-2 text-muted-foreground transition hover:bg-secondary hover:text-foreground disabled:opacity-40"
-          >
-            <ChevronUp className="h-4 w-4" />
-          </button>
+          {!isMobile && (
+            <button
+              aria-label="Open now playing"
+              onClick={onExpand}
+              disabled={!t}
+              className="rounded-full p-2 text-muted-foreground transition hover:bg-secondary hover:text-foreground disabled:opacity-40"
+            >
+              <ChevronUp className="h-4 w-4" />
+            </button>
+          )}
         </div>
       </div>
     </div>

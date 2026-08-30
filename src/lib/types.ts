@@ -1,4 +1,5 @@
 import type { LyricLine } from "./lyrics";
+import { parseLinks, type ArtistLink } from "./artistProfile";
 import { mapModerationStatus, type ModerationStatus } from "./admin";
 
 export type MediaKind = "audio" | "video";
@@ -139,6 +140,36 @@ export function mapArtist(row: ArtistDBRow): ArtistProfile {
     claimEvidence: row.claim_evidence ?? "",
     claimLink: row.claim_link ?? "",
     claimedAt: row.claimed_at ?? null,
+  };
+}
+
+/** The extra profile content a verified artist adds: bio, photo, links. */
+export interface ArtistProfileExtra {
+  rowId: number;
+  name: string;
+  bio: string;
+  imageUrl: string;
+  links: ArtistLink[];
+  createdBy: string | null;
+}
+
+interface ArtistExtraDBRow {
+  _row_id: number;
+  name: string;
+  bio?: string | null;
+  image_url?: string | null;
+  links_json?: string | null;
+  _created_by?: string | null;
+}
+
+export function mapArtistExtra(row: ArtistExtraDBRow): ArtistProfileExtra {
+  return {
+    rowId: row._row_id,
+    name: row.name,
+    bio: row.bio ?? "",
+    imageUrl: row.image_url ?? "",
+    links: parseLinks(row.links_json),
+    createdBy: row._created_by ?? null,
   };
 }
 

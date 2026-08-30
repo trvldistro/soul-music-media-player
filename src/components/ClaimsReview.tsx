@@ -1,9 +1,9 @@
 import { BadgeCheck, Check, Inbox, Loader2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import type { ArtistProfile } from "@/lib/types";
+import type { AdminClaimRecord } from "@/lib/adminApi";
 
 interface ClaimsReviewProps {
-  claims: ArtistProfile[];
+  claims: AdminClaimRecord[];
   busyName: string | null;
   errorNote: string | null;
   onApprove: (name: string) => void;
@@ -39,23 +39,25 @@ export function ClaimsReview({ claims, busyName, errorNote, onApprove, onReject 
           {claims.map((claim) => {
             const busy = busyName === claim.name;
             return (
-              <div
-                key={claim.rowId}
-                className="rounded-2xl border border-border/70 bg-card p-5"
-              >
+              <div key={claim.rowId} className="rounded-2xl border border-border/70 bg-card p-5">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0">
                     <p className="flex items-center gap-2 font-display text-lg italic">
                       <BadgeCheck className="h-4 w-4 text-gold-soft" /> {claim.name}
                     </p>
-                    {claim.claimLink && (
+                    {claim.claimantEmail && (
+                      <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                        Filed by {claim.claimantEmail}
+                      </p>
+                    )}
+                    {claim.link && (
                       <a
-                        href={claim.claimLink}
+                        href={claim.link}
                         target="_blank"
                         rel="noreferrer"
                         className="mt-0.5 block truncate text-xs text-primary underline-offset-2 hover:underline"
                       >
-                        {claim.claimLink}
+                        {claim.link}
                       </a>
                     )}
                   </div>
@@ -81,7 +83,7 @@ export function ClaimsReview({ claims, busyName, errorNote, onApprove, onReject 
                   </div>
                 </div>
                 <p className="mt-3 rounded-xl bg-secondary/60 p-3 text-sm leading-relaxed text-muted-foreground">
-                  {claim.claimEvidence || "No evidence provided."}
+                  {claim.evidence || "No evidence provided."}
                 </p>
               </div>
             );
