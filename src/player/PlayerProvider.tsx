@@ -11,6 +11,7 @@ import {
 import type { Track } from "@/lib/types";
 import { buildOrder, nextPos, prevPos, type RepeatMode } from "./queue";
 import { hasSongAndVideo, pickSource } from "@/lib/mediaMatch";
+import { YouTubeMedia } from "./youtube";
 import { recordPlay } from "@/lib/plays";
 import {
   closeDeviceMedia,
@@ -45,6 +46,12 @@ export interface PlayerApi {
    * Pass null to tuck it away again — playback keeps running either way.
    */
   mountVideo: (target: HTMLElement | null) => void;
+  /**
+   * Points YouTube's parked player box at `target` (the Now Playing stage).
+   * Pass null to fall back to the small floating thumbnail. The iframe
+   * itself never moves — moving it would restart the song.
+   */
+  mountYouTube: (target: HTMLElement | null) => void;
   /** True while the current song plays through its attached video. */
   videoMode: boolean;
   /** True when the current song has both audio and an attached video. */
@@ -52,6 +59,9 @@ export interface PlayerApi {
   /** Flips the current song between its audio and its attached video. */
   setVideoMode: (on: boolean) => void;
 }
+
+/** Anything the player can drive: a real media element or YouTube's player. */
+type ActiveMedia = HTMLMediaElement | YouTubeMedia;
 
 const PlayerContext = createContext<PlayerApi | null>(null);
 
@@ -68,6 +78,12 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   // overlay while a music video is on screen.
   const videoElRef = useRef<HTMLVideoElement | null>(null);
   const videoHomeRef = useRef<HTMLDivElement | null>(null);
+  // YouTube's official player, parked in its own box below. The box is styled
+  // into view (never reparented) so the video never restarts.
+  const ytRef = useRef<YouTubeMedia | null>(null);
+  if (ytRef.current === null) ytRef.current = new YouTubeMedia();
+  const ytHomeRef = useRef<HTMLDivElement | null>(null);
+  const ytStageTargetRef = useRef<HTMLElement | null>(null);
 
   const [queue, setQueue] = useState<Track[]>([]);
   const [order, setOrder] = useState<number[]>([]);
@@ -88,27 +104,31 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const [videoMode, setVideoModeState] = useState(false);
 
   const current = queue[order[pos] ?? -1] ?? null;
-  // The active element: the video element for real music videos and for songs
-  // flipped into video mode, the audio element otherwise.
-  const isVideoTrack = current ? pickSource(current, videoMode) === "video" : false;
+  // Which source plays: YouTube's player, the video element, or the audio element.
+  const source = current ? pickSource(current, videoMode) : "audio";
+  const isVideoTrack = source === "video";
 
   // Latest values for stable event listeners.
   const live = useRef({ order, pos, repeat, playing, queue });
   live.current = { order, pos, repeat, playing, queue };
 
-  // The element that plays the current track — the video element for music
-  // videos, the audio element for everything else.
-  const activeElRef = useRef<HTMLMediaElement | null>(audioRef.current);
-  activeElRef.current = isVideoTrack ? videoElRef.current : audioRef.current;
+  // The element that plays the current track.
+  const activeElRef = useRef<ActiveMedia | null>(audioRef.current);
+  activeElRef.current =
+    source === "youtube"
+      ? ytRef.current
+      : isVideoTrack
+        ? videoElRef.current
+        : audioRef.current;
 
-  // ended / loadedmetadata listeners (attached once to both elements)
+  // ended / loadedmetadata listeners (attached once to all three elements)
   useEffect(() => {
-    const elements = [audioRef.current, videoElRef.current].filter(
-      (el): el is HTMLMediaElement => el != null,
+    const media: ActiveMedia[] = [audioRef.current, videoElRef.current, ytRef.current].filter(
+      (el): el is ActiveMedia => el != null,
     );
     const onEnded = (event: Event) => {
-      const el = event.target as HTMLMediaElement;
-      if (el !== activeElRef.current) return;
+      const el = event.target as ActiveMedia | null;
+      if (el == null || el !== activeElRef.current) return;
       const { order: o, pos: p, repeat: r } = live.current;
       if (r === "one") {
         el.currentTime = 0;
@@ -127,8 +147,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       void recordPlay(live.current.queue[o[np] ?? -1] ?? null);
     };
     const onLoaded = (event: Event) => {
-      const el = event.target as HTMLMediaElement;
-      if (el !== activeElRef.current) return;
+      const el = event.target as ActiveMedia | null;
+      if (el == null || el !== activeElRef.current) return;
       if (Number.isFinite(el.duration) && el.duration > 0) {
         setDuration(el.duration);
         const track = live.current.queue[live.current.order[live.current.pos] ?? -1] ?? null;
@@ -140,13 +160,13 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       // A missing or unloadable file: stop pretending it is playing.
       console.warn("[player] media failed to load");
     };
-    for (const el of elements) {
+    for (const el of media) {
       el.addEventListener("ended", onEnded);
       el.addEventListener("loadedmetadata", onLoaded);
       el.addEventListener("error", onError);
     }
     return () => {
-      for (const el of elements) {
+      for (const el of media) {
         el.removeEventListener("ended", onEnded);
         el.removeEventListener("loadedmetadata", onLoaded);
         el.removeEventListener("error", onError);
@@ -154,7 +174,13 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  // Load the current track into the right element and retire the other.
+  // Park YouTube's player box off-screen; views style it into place later.
+  useEffect(() => {
+    const home = ytHomeRef.current;
+    if (home) ytRef.current?.attach(home);
+  }, []);
+
+  // Load the current track into the right element and retire the others.
   // Device-storage tracks resolve their playable URL on demand, straight from
   // the visitor's storage, so loading is async with a cancellation guard.
   const prevDevicePathRef = useRef<string | null>(null);
@@ -163,7 +189,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const audio = audioRef.current;
     const video = videoElRef.current;
-    const retire = (el: HTMLMediaElement | null) => {
+    const yt = ytRef.current;
+    const retireEl = (el: HTMLMediaElement | null) => {
       if (!el) return;
       el.pause();
       el.removeAttribute("src");
@@ -174,10 +201,33 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       if (!current) {
         closeDeviceMedia(prevDevicePathRef.current);
         prevDevicePathRef.current = null;
-        retire(audio);
-        retire(video);
+        retireEl(audio);
+        retireEl(video);
+        yt?.pause();
         setProgress(0);
         setDuration(0);
+        return;
+      }
+      // Coming back from a flip between audio and video: land at the same spot.
+      const resumeAt = resumeAtRef.current;
+      resumeAtRef.current = null;
+      // Songs streamed from YouTube play through the official embedded player.
+      if (source === "youtube" && current.youtubeId) {
+        closeDeviceMedia(prevDevicePathRef.current);
+        prevDevicePathRef.current = null;
+        retireEl(audio);
+        retireEl(video);
+        try {
+          await yt?.load(current.youtubeId, {
+            startAt: resumeAt ?? 0,
+            autoplay: live.current.playing,
+          });
+        } catch {
+          console.warn("[player] YouTube player failed to load");
+        }
+        if (cancelled) return;
+        setProgress(resumeAt ?? 0);
+        setDuration(current.duration || 0);
         return;
       }
       let src: string;
@@ -200,16 +250,14 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       const el = isVideoTrack && video ? video : audio;
       if (isVideoTrack && video) {
         video.src = src;
-        retire(audio);
+        retireEl(audio);
       } else if (audio) {
         audio.src = src;
-        retire(video);
+        retireEl(video);
       }
+      yt?.pause();
       setProgress(0);
       setDuration(current.duration || 0);
-      // Coming back from a flip between audio and video: land at the same spot.
-      const resumeAt = resumeAtRef.current;
-      resumeAtRef.current = null;
       if (resumeAt != null && el) {
         const seekTo = () => {
           try {
@@ -228,7 +276,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [current?.rowId, isVideoTrack]);
+  }, [current?.rowId, source]);
 
   // Play / pause intent.
   useEffect(() => {
@@ -239,11 +287,11 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     } else {
       el.pause();
     }
-  }, [playing, current?.rowId, isVideoTrack]);
+  }, [playing, current?.rowId, source]);
 
   // Volume.
   useEffect(() => {
-    for (const el of [audioRef.current, videoElRef.current]) {
+    for (const el of [audioRef.current, videoElRef.current, ytRef.current]) {
       if (el) el.volume = muted ? 0 : volume;
     }
     if (!muted) {
@@ -381,6 +429,45 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const mountYouTube = useCallback((target: HTMLElement | null) => {
+    ytStageTargetRef.current = target;
+  }, []);
+
+  // YouTube's iframe cannot be moved around the DOM (it would reload and
+  // restart the song), so its parked box is styled into place instead:
+  // exactly over the Now Playing stage while that screen is open, otherwise a
+  // small floating thumbnail above the player bar.
+  useEffect(() => {
+    if (source !== "youtube") return;
+    const box = ytHomeRef.current;
+    if (!box) return;
+    let raf = 0;
+    const apply = () => {
+      const target = ytStageTargetRef.current;
+      if (target && target.isConnected) {
+        const r = target.getBoundingClientRect();
+        box.style.cssText =
+          `position:fixed;left:${r.left}px;top:${r.top}px;width:${r.width}px;height:${r.height}px;` +
+          `z-index:55;overflow:hidden;border-radius:1rem;pointer-events:auto;`;
+      } else {
+        box.style.cssText =
+          "position:fixed;right:1rem;bottom:6rem;width:168px;height:94.5px;z-index:45;" +
+          "overflow:hidden;border-radius:0.75rem;box-shadow:0 12px 32px rgba(0,0,0,.45);" +
+          "pointer-events:none;";
+      }
+    };
+    const tick = () => {
+      apply();
+      raf = window.requestAnimationFrame(tick);
+    };
+    apply();
+    raf = window.requestAnimationFrame(tick);
+    return () => {
+      window.cancelAnimationFrame(raf);
+      box.style.cssText = "";
+    };
+  }, [source]);
+
   const api = useMemo<PlayerApi>(
     () => ({
       current,
@@ -405,6 +492,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       setVolume,
       toggleMuted,
       mountVideo,
+      mountYouTube,
       videoMode,
       videoAvailable: hasSongAndVideo(current),
       setVideoMode,
@@ -432,6 +520,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       setVolume,
       toggleMuted,
       mountVideo,
+      mountYouTube,
       videoMode,
       setVideoMode,
       current,
@@ -492,6 +581,13 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
           className="h-full w-full object-contain"
         />
       </div>
+      {/* Parked home for YouTube's official embedded player — styled into view
+          while a YouTube song plays, never moved. */}
+      <div
+        ref={ytHomeRef}
+        aria-hidden
+        className="pointer-events-none fixed top-0 left-0 h-0 w-0 overflow-hidden bg-black"
+      />
     </PlayerContext.Provider>
   );
 }

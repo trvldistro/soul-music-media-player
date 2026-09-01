@@ -80,7 +80,7 @@ export function HomeView({
       <div className="flex flex-col items-center gap-5 rounded-3xl border border-dashed border-border px-6 py-20 text-center">
         <span className="font-display text-5xl italic text-muted-foreground">The crates are empty</span>
         <p className="max-w-sm text-sm leading-relaxed text-muted-foreground">
-          Nothing in the library yet. Share your first track and the turntable starts turning.
+          Nothing in the library yet. Add your first song and the turntable starts turning.
         </p>
         <Button onClick={onOpenUpload} className="rounded-full font-semibold">
           <PlusCircle className="mr-2 h-4 w-4" /> Add music
@@ -247,7 +247,7 @@ export function HomeView({
         <section>
           <div className="mb-2 flex items-end justify-between">
             <h2 className="font-display text-2xl italic">From the fans</h2>
-            <span className="text-xs text-muted-foreground">{fanUploads.length} uploads</span>
+            <span className="text-xs text-muted-foreground">{fanUploads.length} songs</span>
           </div>
           <p className="mb-4 text-xs text-muted-foreground">
             Shared by the SOUL MUSIC community — tap “Add music” to drop yours in.

@@ -1,4 +1,4 @@
-import { Clapperboard, Clock, Heart, Lock, Mic2, MoreHorizontal, Music2, Pencil, Play, Plus, Trash2 } from "lucide-react";
+import { Clapperboard, Clock, Heart, Lock, Mic2, MoreHorizontal, Music2, Pencil, Play, Plus, Trash2, Youtube } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -84,6 +84,8 @@ export function TrackRow({
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-secondary">
             {track.mediaKind === "video" ? (
               <Clapperboard className="h-4 w-4 text-gold-soft" />
+            ) : track.mediaKind === "youtube" ? (
+              <Youtube className="h-4 w-4 text-red-400" />
             ) : (
               <Music2 className="h-4 w-4 text-muted-foreground" />
             )}
@@ -91,6 +93,11 @@ export function TrackRow({
         )}
         <div className="min-w-0">
           <p className={cn("truncate text-sm font-medium", isCurrent ? "text-primary" : "text-foreground")}>
+            {track.mediaKind === "youtube" && (
+              <span className="mr-1.5 inline-flex items-center gap-1 rounded-full border border-red-500/40 px-1.5 py-0.5 align-middle text-[10px] font-semibold uppercase tracking-wide text-red-400">
+                <Youtube className="h-3 w-3" /> YouTube
+              </span>
+            )}
             {track.videoUrl && (
               <span className="mr-1.5 inline-flex items-center gap-1 rounded-full border border-border px-1.5 py-0.5 align-middle text-[10px] font-semibold uppercase tracking-wide text-gold-soft">
                 <Clapperboard className="h-3 w-3" /> Video

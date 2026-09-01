@@ -187,7 +187,7 @@ function AdminConsole() {
       .toLowerCase()
       .includes(search.trim().toLowerCase());
   const songs = useMemo(
-    () => tracks.filter((t) => t.mediaKind === "audio" && matches(t)),
+    () => tracks.filter((t) => (t.mediaKind === "audio" || t.mediaKind === "youtube") && matches(t)),
     [tracks, search, users],
   );
   const videos = useMemo(
@@ -231,7 +231,7 @@ function AdminConsole() {
 
   const stats: Array<{ label: string; value: number }> = [
     { label: "Waiting review", value: queue.length },
-    { label: "Songs", value: tracks.filter((t) => t.mediaKind === "audio").length },
+    { label: "Songs", value: tracks.filter((t) => t.mediaKind === "audio" || t.mediaKind === "youtube").length },
     { label: "Videos", value: tracks.filter((t) => t.mediaKind === "video").length },
     { label: "Lyrics", value: lyricsQ.data?.length ?? 0 },
     { label: "Users", value: users.length },
@@ -649,6 +649,13 @@ function TrackThumb({ track }: { track: Track }) {
 }
 
 function KindChip({ track }: { track: Track }) {
+  if (track.mediaKind === "youtube") {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full border border-red-500/40 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-red-400">
+        YouTube
+      </span>
+    );
+  }
   if (track.mediaKind !== "video") return null;
   return (
     <span className="inline-flex items-center gap-1 rounded-full border border-border px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-gold-soft">

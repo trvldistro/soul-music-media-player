@@ -37,14 +37,19 @@ export function findSongForVideo(
   return candidates.find((track) => !track.videoUrl) ?? candidates[0] ?? null;
 }
 
+/** Which source plays: YouTube's player, the video element, or the audio element. */
+export type PlaySource = "audio" | "video" | "youtube";
+
 /**
- * Which element plays: the video element for real music videos and for songs
- * flipped into video mode, the audio element for everything else.
+ * Which element plays: YouTube's embedded player for songs streamed from
+ * YouTube, the video element for real music videos and songs flipped into
+ * video mode, the audio element for everything else.
  */
 export function pickSource(
-  track: Pick<Track, "mediaKind" | "videoUrl">,
+  track: Pick<Track, "mediaKind" | "videoUrl" | "youtubeId">,
   videoMode: boolean,
-): "audio" | "video" {
+): PlaySource {
+  if (track.mediaKind === "youtube" && track.youtubeId) return "youtube";
   if (track.mediaKind === "video") return "video";
   return videoMode && track.videoUrl ? "video" : "audio";
 }

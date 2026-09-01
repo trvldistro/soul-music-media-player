@@ -2,7 +2,7 @@ import type { LyricLine } from "./lyrics";
 import { parseLinks, type ArtistLink } from "./artistProfile";
 import { mapModerationStatus, type ModerationStatus } from "./admin";
 
-export type MediaKind = "audio" | "video";
+export type MediaKind = "audio" | "video" | "youtube";
 
 export interface Track {
   rowId: number;
@@ -15,8 +15,10 @@ export interface Track {
   audioUrl: string;
   coverUrl: string;
   isDemo: boolean;
-  /** "video" for music videos uploaded by fans, "audio" for songs. */
+  /** "video" for standalone music videos, "youtube" for songs streamed from YouTube, "audio" for hosted songs. */
   mediaKind: MediaKind;
+  /** YouTube video id — the song streams through YouTube's official player. */
+  youtubeId: string;
   /** Content path of the music video (empty for audio-only tracks). */
   videoUrl: string;
   /** Who attached the music video to this song, when one is attached. */
@@ -56,6 +58,7 @@ interface TrackDBRow {
   cover_url: string;
   is_demo: number;
   media_kind?: string | null;
+  youtube_id?: string | null;
   video_url?: string | null;
   video_attached_by?: string | null;
   uploader_name?: string | null;
@@ -80,7 +83,8 @@ export function mapTrack(row: TrackDBRow): Track {
     audioUrl: row.audio_url,
     coverUrl: row.cover_url ?? "",
     isDemo: row.is_demo === 1,
-    mediaKind: row.media_kind === "video" ? "video" : "audio",
+    mediaKind: row.media_kind === "video" ? "video" : row.media_kind === "youtube" ? "youtube" : "audio",
+    youtubeId: row.youtube_id ?? "",
     videoUrl: row.video_url ?? "",
     videoBy: row.video_attached_by ?? null,
     uploaderName: row.uploader_name ?? "",

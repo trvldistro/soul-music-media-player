@@ -13,6 +13,7 @@ function song(partial: Partial<Track> & { rowId: number }): Track {
     coverUrl: "",
     isDemo: false,
     mediaKind: "audio",
+    youtubeId: "",
     videoUrl: "",
     uploaderName: "",
     createdBy: null,
@@ -96,6 +97,12 @@ describe("pickSource", () => {
   it("always plays standalone music videos as video", () => {
     expect(pickSource(song({ rowId: 1, mediaKind: "video", videoUrl: "/videos/v.mp4" }), false)).toBe("video");
   });
+
+  // @kliv-spec-derived — from user intent: "songs added from YouTube play through YouTube"
+  it("plays YouTube songs through YouTube's player whatever the switch says", () => {
+    expect(pickSource(song({ rowId: 1, mediaKind: "youtube", youtubeId: "abc123DEF45" }), false)).toBe("youtube");
+    expect(pickSource(song({ rowId: 1, mediaKind: "youtube", youtubeId: "abc123DEF45" }), true)).toBe("youtube");
+  });
 });
 
 describe("hasSongAndVideo", () => {
@@ -103,6 +110,7 @@ describe("hasSongAndVideo", () => {
     expect(hasSongAndVideo(song({ rowId: 1, mediaKind: "audio", videoUrl: "/videos/v.mp4" }))).toBe(true);
     expect(hasSongAndVideo(song({ rowId: 1, mediaKind: "audio" }))).toBe(false);
     expect(hasSongAndVideo(song({ rowId: 1, mediaKind: "video", videoUrl: "/videos/v.mp4" }))).toBe(false);
+    expect(hasSongAndVideo(song({ rowId: 1, mediaKind: "youtube", youtubeId: "abc123DEF45" }))).toBe(false);
     expect(hasSongAndVideo(null)).toBe(false);
   });
 });

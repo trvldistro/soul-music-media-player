@@ -25,7 +25,7 @@ import { TrackRow } from "@/components/TrackRow";
 import { PlayerBar } from "@/components/PlayerBar";
 import { NowPlaying } from "@/components/NowPlaying";
 import { MobileNav } from "@/components/MobileNav";
-import { UploadDialog } from "@/components/UploadDialog";
+import { AddYouTubeDialog } from "@/components/AddYouTubeDialog";
 import { EditTrackDialog } from "@/components/EditTrackDialog";
 import { ArtistView } from "@/components/ArtistView";
 import { ClaimArtistDialog } from "@/components/ClaimArtistDialog";
@@ -98,7 +98,13 @@ function SoulApp() {
     return [...fanTracks].slice(-10).reverse();
   }, [tracks]);
   const videos = useMemo(
-    () => tracks.filter((t) => t.mediaKind === "video" || (t.mediaKind === "audio" && t.videoUrl)),
+    () =>
+      tracks.filter(
+        (t) =>
+          t.mediaKind === "video" ||
+          t.mediaKind === "youtube" ||
+          (t.mediaKind === "audio" && t.videoUrl),
+      ),
     [tracks],
   );
   const searchResults = useMemo(
@@ -500,7 +506,7 @@ function SoulApp() {
         signedIn={signedIn}
         onAddLyrics={setLyricsTrack}
       />
-      <UploadDialog open={uploadOpen} onOpenChange={setUploadOpen} signedIn={signedIn} artists={artists} />
+      <AddYouTubeDialog open={uploadOpen} onOpenChange={setUploadOpen} signedIn={signedIn} artists={artists} />
       <EditTrackDialog track={editTrack} open={editTrack !== null} onOpenChange={(o) => !o && setEditTrack(null)} />
       <CreatePlaylistDialog open={createPlaylistOpen} onOpenChange={setCreatePlaylistOpen} />
       <AddToPlaylistDialog track={addToTrack} onOpenChange={(open) => !open && setAddToTrack(null)} />

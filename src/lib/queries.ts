@@ -37,6 +37,7 @@ interface TrackDBRow {
   cover_url: string;
   is_demo: number;
   media_kind?: string | null;
+  youtube_id?: string | null;
   video_url?: string | null;
   video_attached_by?: string | null;
   uploader_name?: string | null;
@@ -242,6 +243,7 @@ export interface NewTrackInput {
   coverUrl: string;
   mediaKind?: MediaKind;
   videoUrl?: string;
+  youtubeId?: string;
   uploaderName?: string;
 }
 
@@ -274,6 +276,7 @@ export function useInsertTrack() {
         cover_url: input.coverUrl,
         is_demo: 0,
         media_kind: input.mediaKind ?? "audio",
+        youtube_id: input.youtubeId ?? null,
         video_url: input.videoUrl ?? null,
         uploader_name: input.uploaderName ?? artistName,
       })) as unknown as TrackDBRow;
@@ -621,6 +624,67 @@ export function useAttachVideo() {
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["tracks"] });
+    },
+  });
+}
+
+// ── YouTube lookups ─────────────────────────────────────────────────────────
+
+/** One YouTube video, as the add-dialog sees it. */
+export interface YouTubeVideo {
+  videoId: string;
+  title: string;
+  channel: string;
+  thumbnail: string;
+  durationSeconds: number;
+}
+
+function functionErrorBody(e: unknown): { error?: string; message?: string } {
+  const err = e as { details?: unknown; message?: string };
+  if (err?.details && typeof err.details === "object") {
+    return err.details as { error?: string; message?: string };
+  }
+  return { message: err?.message };
+}
+
+/** Reads a pasted YouTube link into title / channel / thumbnail server-side. */
+export function useYouTubeLookup() {
+  return useMutation({
+    mutationFn: async (url: string): Promise<YouTubeVideo> => {
+      try {
+        return await functions.post<YouTubeVideo>("youtube_music", { action: "lookup", url });
+      } catch (e) {
+        const body = functionErrorBody(e);
+        throw new Error(body.message ?? "Couldn't read that link — check it and try again.");
+      }
+    },
+  });
+}
+
+/**
+ * Searches YouTube through the official Data API. A missing API key comes
+ * back as data ({ ok: false, reason: "missing_key" }) so the dialog can
+ * explain instead of showing an error.
+ */
+export function useYouTubeSearch() {
+  return useMutation({
+    mutationFn: async (
+      q: string,
+    ): Promise<
+      | { ok: true; results: YouTubeVideo[] }
+      | { ok: false; reason: "missing_key" | "error"; message?: string }
+    > => {
+      try {
+        const res = await functions.post<{ results?: YouTubeVideo[] }>("youtube_music", {
+          action: "search",
+          q,
+        });
+        return { ok: true, results: res.results ?? [] };
+      } catch (e) {
+        const body = functionErrorBody(e);
+        if (body.error === "missing_key") return { ok: false, reason: "missing_key" };
+        return { ok: false, reason: "error", message: body.message };
+      }
     },
   });
 }

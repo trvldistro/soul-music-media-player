@@ -12,6 +12,7 @@ function track(partial: Partial<Track> & { title: string; artist: string }): Tra
     coverUrl: "",
     isDemo: true,
     mediaKind: "audio",
+    youtubeId: "",
     videoUrl: "",
     uploaderName: "",
     createdBy: null,

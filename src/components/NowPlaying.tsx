@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { ChevronDown, Clapperboard, Music2, Pause, Play, Repeat, Repeat1, Shuffle, SkipBack, SkipForward } from "lucide-react";
+import { ChevronDown, Clapperboard, Music2, Pause, Play, Repeat, Repeat1, Shuffle, SkipBack, SkipForward, Youtube } from "lucide-react";
 import { Slider } from "@/components/ui/slider";
 import { formatDuration } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -22,8 +22,10 @@ export function NowPlaying({ open, onClose, signedIn, onAddLyrics }: NowPlayingP
   const p = usePlayer();
   const t = p.current;
   // The video element shows for real music videos and for songs flipped into
-  // video mode.
-  const showVideo = !!t && pickSource(t, p.videoMode) === "video";
+  // video mode; YouTube songs get their own stage below.
+  const source = t ? pickSource(t, p.videoMode) : "audio";
+  const showVideo = source === "video";
+  const showYouTube = source === "youtube";
   const videoMountRef = useRef<HTMLDivElement | null>(null);
   const mountVideo = p.mountVideo;
 
@@ -33,6 +35,16 @@ export function NowPlaying({ open, onClose, signedIn, onAddLyrics }: NowPlayingP
     mountVideo(videoMountRef.current);
     return () => mountVideo(null);
   }, [open, showVideo, mountVideo, t?.rowId]);
+
+  // YouTube's player is styled over this placeholder, not moved into it —
+  // moving the iframe would restart the song.
+  const ytStageRef = useRef<HTMLDivElement | null>(null);
+  const mountYouTube = p.mountYouTube;
+  useEffect(() => {
+    if (!open || !showYouTube) return;
+    mountYouTube(ytStageRef.current);
+    return () => mountYouTube(null);
+  }, [open, showYouTube, mountYouTube, t?.rowId]);
 
   if (!open || !t) return null;
 
@@ -76,6 +88,14 @@ export function NowPlaying({ open, onClose, signedIn, onAddLyrics }: NowPlayingP
                 data-testid="video-stage"
                 role="region"
                 aria-label="Music video"
+                className="relative aspect-video w-full max-w-2xl overflow-hidden rounded-2xl bg-black shadow-2xl shadow-black/70"
+              />
+            ) : showYouTube ? (
+              <div
+                ref={ytStageRef}
+                data-testid="youtube-stage"
+                role="region"
+                aria-label="YouTube video"
                 className="relative aspect-video w-full max-w-2xl overflow-hidden rounded-2xl bg-black shadow-2xl shadow-black/70"
               />
             ) : (
@@ -154,6 +174,10 @@ export function NowPlaying({ open, onClose, signedIn, onAddLyrics }: NowPlayingP
               ) : showVideo ? (
                 <p className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-gold-soft">
                   <Clapperboard className="h-3.5 w-3.5" /> Music video
+                </p>
+              ) : showYouTube ? (
+                <p className="inline-flex items-center gap-1.5 rounded-full border border-red-500/40 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-red-400">
+                  <Youtube className="h-3.5 w-3.5" /> Streaming from YouTube
                 </p>
               ) : null}
             </div>

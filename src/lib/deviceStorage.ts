@@ -503,6 +503,7 @@ export function toDeviceTracks(metas: DeviceMediaMeta[]): Track[] {
     coverUrl: "",
     isDemo: false,
     mediaKind: m.kind,
+    youtubeId: "",
     videoUrl: "",
     uploaderName: "",
     createdBy: null,

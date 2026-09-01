@@ -15,6 +15,7 @@ function trackWithId(rowId: number): Track {
     coverUrl: "",
     isDemo: true,
     mediaKind: "audio",
+    youtubeId: "",
     videoUrl: "",
     uploaderName: "",
     createdBy: null,
