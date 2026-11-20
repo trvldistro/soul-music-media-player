@@ -123,6 +123,10 @@ export interface ArtistProfile {
   claimEvidence: string;
   claimLink: string;
   claimedAt: number | null;
+  /** Shareable handle — the part after /artist/ in the profile link. */
+  handle: string;
+  /** Other spellings that resolve to this same artist page. */
+  aliases: string[];
 }
 
 interface ArtistDBRow {
@@ -133,6 +137,7 @@ interface ArtistDBRow {
   claim_evidence?: string | null;
   claim_link?: string | null;
   claimed_at?: number | null;
+  handle?: string | null;
 }
 
 export function mapArtist(row: ArtistDBRow): ArtistProfile {
@@ -144,6 +149,8 @@ export function mapArtist(row: ArtistDBRow): ArtistProfile {
     claimEvidence: row.claim_evidence ?? "",
     claimLink: row.claim_link ?? "",
     claimedAt: row.claimed_at ?? null,
+    handle: row.handle ?? "",
+    aliases: [],
   };
 }
 

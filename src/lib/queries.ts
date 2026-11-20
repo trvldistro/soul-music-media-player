@@ -8,6 +8,11 @@ import {
 import functions from "@/lib/shared/kliv-functions.js";
 
 import { parseLines, serializeLines, type LyricLine } from "./lyrics";
+import {
+  isYouTubeResultsPayload,
+  isYouTubeVideoPayload,
+  preferOfficialMusic,
+} from "./youtube";
 import { trackIsVisible, isPastPurgeDeadline } from "./admin";
 import { awardSoulPoints } from "./soulPoints";
 import { findArtistMatch } from "./artistMatch";
@@ -639,10 +644,15 @@ export interface YouTubeVideo {
   durationSeconds: number;
 }
 
-function functionErrorBody(e: unknown): { error?: string; message?: string } {
+function functionErrorBody(e: unknown): {
+  error?: string;
+  message?: string;
+  results?: unknown;
+  videoId?: string;
+} {
   const err = e as { details?: unknown; message?: string };
   if (err?.details && typeof err.details === "object") {
-    return err.details as { error?: string; message?: string };
+    return err.details as { error?: string; message?: string; results?: unknown; videoId?: string };
   }
   return { message: err?.message };
 }
@@ -655,6 +665,10 @@ export function useYouTubeLookup() {
         return await functions.post<YouTubeVideo>("youtube_music", { action: "lookup", url });
       } catch (e) {
         const body = functionErrorBody(e);
+        // The function gateway occasionally stamps a working response with a
+        // 500 while still delivering its body — a complete video payload is
+        // valid regardless of the label, so use it.
+        if (isYouTubeVideoPayload(body)) return body;
         throw new Error(body.message ?? "Couldn't read that link — check it and try again.");
       }
     },
@@ -662,8 +676,9 @@ export function useYouTubeLookup() {
 }
 
 /**
- * Searches YouTube through the official Data API. A missing API key comes
- * back as data ({ ok: false, reason: "missing_key" }) so the dialog can
+ * Searches YouTube through the official Data API, Music category first and
+ * official releases ranked to the top. A missing key or exhausted daily
+ * quota comes back as data ({ ok: false, reason }) so the dialog can
  * explain instead of showing an error.
  */
 export function useYouTubeSearch() {
@@ -672,17 +687,29 @@ export function useYouTubeSearch() {
       q: string,
     ): Promise<
       | { ok: true; results: YouTubeVideo[] }
-      | { ok: false; reason: "missing_key" | "error"; message?: string }
+      | {
+          ok: false;
+          reason: "missing_key" | "quota_exceeded" | "error";
+          message?: string;
+        }
     > => {
       try {
         const res = await functions.post<{ results?: YouTubeVideo[] }>("youtube_music", {
           action: "search",
           q,
         });
-        return { ok: true, results: res.results ?? [] };
+        return { ok: true, results: preferOfficialMusic(res.results ?? []) };
       } catch (e) {
         const body = functionErrorBody(e);
+        // A full results list in the payload means YouTube answered — accept it
+        // even when the gateway mislabels the response as failed.
+        if (isYouTubeResultsPayload(body.results)) {
+          return { ok: true, results: preferOfficialMusic(body.results) };
+        }
         if (body.error === "missing_key") return { ok: false, reason: "missing_key" };
+        if (body.error === "quota_exceeded") {
+          return { ok: false, reason: "quota_exceeded", message: body.message };
+        }
         return { ok: false, reason: "error", message: body.message };
       }
     },

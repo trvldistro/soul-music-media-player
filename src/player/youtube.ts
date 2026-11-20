@@ -16,6 +16,8 @@ export interface YTPlayer {
   getCurrentTime(): number;
   getDuration(): number;
   setVolume(volume: number): void;
+  mute(): void;
+  unMute(): void;
   loadVideoById(options: { videoId: string; startSeconds?: number }): void;
   destroy(): void;
 }
@@ -88,6 +90,7 @@ export class YouTubeMedia {
   private announcedDuration = false;
   private pendingPlay = false;
   private volume01 = 0.9;
+  private mutedFlag = false;
   paused = true;
   readyState = 0;
 
@@ -117,17 +120,21 @@ export class YouTubeMedia {
   }
 
   get currentTime(): number {
-    return this.player?.getCurrentTime() ?? 0;
+    const player = this.player;
+    if (!player || typeof player.getCurrentTime !== "function") return 0;
+    return player.getCurrentTime() ?? 0;
   }
 
   set currentTime(seconds: number) {
-    if (this.player && Number.isFinite(seconds)) {
+    if (this.player && typeof this.player.seekTo === "function" && Number.isFinite(seconds)) {
       this.player.seekTo(Math.max(0, seconds), true);
     }
   }
 
   get duration(): number {
-    return this.player?.getDuration() ?? 0;
+    const player = this.player;
+    if (!player || typeof player.getDuration !== "function") return 0;
+    return player.getDuration() ?? 0;
   }
 
   get volume(): number {
@@ -136,7 +143,32 @@ export class YouTubeMedia {
 
   set volume(v: number) {
     this.volume01 = Math.min(1, Math.max(0, v));
-    if (this.player) this.player.setVolume(Math.round(this.volume01 * 100));
+    if (typeof this.player?.setVolume === "function") {
+      this.player.setVolume(Math.round(this.volume01 * 100));
+    }
+  }
+
+  /**
+   * YouTube's player comes up muted under browser autoplay rules, and
+   * setVolume() alone never lifts that — only unMute() does. So the muted
+   * flag is routed to YouTube's real mute/unMute, and re-applied on ready,
+   * otherwise every YouTube song plays silent with no way to hear it.
+   */
+  get muted(): boolean {
+    return this.mutedFlag;
+  }
+
+  set muted(v: boolean) {
+    this.mutedFlag = v;
+    const player = this.player;
+    if (player && typeof player.mute === "function") {
+      if (v) {
+        player.mute();
+      } else {
+        player.unMute();
+        player.setVolume(Math.round(this.volume01 * 100));
+      }
+    }
   }
 
   /** Loads (or swaps) a video. Safe to call before the API script finishes. */
@@ -145,7 +177,9 @@ export class YouTubeMedia {
     if (opts?.autoplay) this.pendingPlay = true;
     if (this.player) {
       this.announcedDuration = false;
-      this.player.loadVideoById({ videoId, startSeconds });
+      if (typeof this.player.loadVideoById === "function") {
+        this.player.loadVideoById({ videoId, startSeconds });
+      }
       return;
     }
     const YT = await loadYouTubeApi();
@@ -168,6 +202,8 @@ export class YouTubeMedia {
         onReady: () => {
           this.readyState = 1;
           this.player?.setVolume(Math.round(this.volume01 * 100));
+          if (this.mutedFlag) this.player?.mute();
+          else this.player?.unMute();
           if (this.pendingPlay) this.player?.playVideo();
         },
         onStateChange: (event: { data: number }) => this.handleStateChange(event.data),
@@ -216,7 +252,7 @@ export class YouTubeMedia {
   }
 
   play(): Promise<void> {
-    if (this.player) {
+    if (this.player && typeof this.player.playVideo === "function") {
       this.player.playVideo();
     } else {
       this.pendingPlay = true;
@@ -228,7 +264,7 @@ export class YouTubeMedia {
   pause(): void {
     this.pendingPlay = false;
     this.paused = true;
-    this.player?.pauseVideo();
+    if (typeof this.player?.pauseVideo === "function") this.player.pauseVideo();
   }
 
   /** Test seam: pretend YouTube handed us a ready-made player. */
@@ -236,6 +272,8 @@ export class YouTubeMedia {
     this.player = player;
     this.readyState = 1;
     player.setVolume(Math.round(this.volume01 * 100));
+    if (this.mutedFlag) player.mute();
+    else player.unMute();
     if (this.pendingPlay) player.playVideo();
   }
 }

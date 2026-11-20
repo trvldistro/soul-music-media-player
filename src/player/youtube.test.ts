@@ -9,6 +9,8 @@ function fakePlayer(): YTPlayer {
     getCurrentTime: vi.fn(() => 41.5),
     getDuration: vi.fn(() => 213),
     setVolume: vi.fn(),
+    mute: vi.fn(),
+    unMute: vi.fn(),
     loadVideoById: vi.fn(),
     destroy: vi.fn(),
   } as unknown as YTPlayer;
@@ -68,5 +70,35 @@ describe("YouTubeMedia", () => {
     const player = fakePlayer();
     media.inject(player);
     expect(player.playVideo).toHaveBeenCalled();
+  });
+
+  // @kliv-spec-derived — from user intent: "the unmute button must actually
+  // make the song audible again". YouTube players come up muted and setVolume
+  // never lifts that, so unmute must reach YouTube's unMute call.
+  it("un-muting lifts YouTube's mute and restores the volume", () => {
+    const media = new YouTubeMedia();
+    const player = fakePlayer();
+    media.inject(player);
+    media.muted = true;
+    expect(player.mute).toHaveBeenCalled();
+    media.muted = false;
+    expect(player.unMute).toHaveBeenCalled();
+    expect(player.setVolume).toHaveBeenLastCalledWith(90);
+  });
+
+  it("a fresh player is told to un-mute when the app is not muted", () => {
+    const media = new YouTubeMedia();
+    const player = fakePlayer();
+    media.inject(player);
+    expect(player.unMute).toHaveBeenCalled();
+  });
+
+  it("a player arriving while the app is muted stays muted", () => {
+    const media = new YouTubeMedia();
+    media.muted = true; // no player yet — just remembered
+    const player = fakePlayer();
+    media.inject(player);
+    expect(player.mute).toHaveBeenCalled();
+    expect(player.unMute).not.toHaveBeenCalled();
   });
 });

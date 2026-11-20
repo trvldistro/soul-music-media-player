@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { Heart, Home, ListMusic, LogIn, LogOut, Plus, Search, ShieldCheck, Smartphone, User, X } from "lucide-react";
+import { Heart, Home, ListMusic, LogIn, LogOut, Mic2, Plus, Search, ShieldCheck, Smartphone, User, X } from "lucide-react";
 import { SoulLogo, type View } from "./AppSidebar";
 import { SoulPointsBadge } from "./SoulPointsBadge";
 import { cn } from "@/lib/utils";
@@ -20,6 +20,7 @@ interface MobileNavProps {
 const ITEMS = [
   { id: "home", label: "Home", icon: Home },
   { id: "search", label: "Search", icon: Search },
+  { id: "artists", label: "Artists", icon: Mic2 },
   { id: "favorites", label: "Favorites", icon: Heart },
   { id: "playlists", label: "Playlists", icon: ListMusic },
   { id: "device", label: "Device storage", icon: Smartphone },

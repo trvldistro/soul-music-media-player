@@ -29,6 +29,7 @@ import { autocompleteArtists } from "@/lib/artistMatch";
 import { formatDuration } from "@/lib/format";
 import { parseYouTubeId, splitVideoTitle, youtubeWatchUrl } from "@/lib/youtube";
 import { songCode } from "@/lib/songCode";
+import { notifyTeamEmail } from "@/lib/teamNotify";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -116,6 +117,12 @@ export function AddYouTubeDialog({ open, onOpenChange, signedIn, artists = [] }:
       setNotice("Search unlocks once a YouTube API key is added — until then, paste a video link instead.");
       return;
     }
+    if (outcome.reason === "quota_exceeded") {
+      setNotice(
+        outcome.message ?? "Daily YouTube search limit reached — paste a link instead.",
+      );
+      return;
+    }
     setError(outcome.message ?? "Search failed — try again in a moment.");
   }
 
@@ -145,6 +152,15 @@ export function AddYouTubeDialog({ open, onOpenChange, signedIn, artists = [] }:
         mediaKind: "youtube",
         youtubeId: video.videoId,
         uploaderName: artist.trim(),
+      });
+      // Email the team — the song lands Unverified and needs a review.
+      void notifyTeamEmail("song_review", {
+        title: title.trim(),
+        artist: artist.trim(),
+        code: songCode(inserted.rowId),
+        genre,
+        album: album.trim(),
+        source: youtubeWatchUrl(video.videoId),
       });
       toast.success("Added to the library", {
         description: `${title.trim()} · ${artist.trim()} — ${songCode(
@@ -274,6 +290,11 @@ export function AddYouTubeDialog({ open, onOpenChange, signedIn, artists = [] }:
                   >
                     <p className="text-xs leading-relaxed">{notice}</p>
                   </div>
+                )}
+                {results.length === 0 && !notice && !search.isPending && (
+                  <p className="text-xs text-muted-foreground">
+                    Finds music first — official audio and music videos rise to the top, fan uploads sink.
+                  </p>
                 )}
                 {results.length > 0 && (
                   <div

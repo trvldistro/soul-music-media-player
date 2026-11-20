@@ -41,6 +41,7 @@ const App = () => (
             {/* The player requires an account, so every visitor is counted: a signed-out
                 arrival is sent to /signup, with a clear link over to /signin for regulars. */}
             <Route path="/" element={<RequireAuth redirectTo="/signup"><Index /></RequireAuth>} />
+            <Route path="/artist/:handle" element={<RequireAuth redirectTo="/signup"><Index /></RequireAuth>} />
             <Route path="/admin" element={<AdminDashboard />} />
             <Route path="/auth/activate" element={<Activate />} />
             <Route path="/account" element={<RequireAuth><AccountHome /></RequireAuth>} />

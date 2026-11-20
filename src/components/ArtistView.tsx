@@ -4,10 +4,13 @@ import {
   ArrowLeft,
   AtSign,
   BadgeCheck,
+  Check,
   Clock3,
+  Copy,
   Facebook,
   Globe,
   Instagram,
+  Link2,
   LogIn,
   Music2,
   Pencil,
@@ -19,6 +22,7 @@ import { Button } from "@/components/ui/button";
 import { groupAlbums, type Album } from "@/lib/tracks";
 import { canEditTrack } from "@/lib/trackEdit";
 import { linkLabel } from "@/lib/artistProfile";
+import { artistHandle, artistPath, artistShareLink } from "@/lib/artistHandle";
 import type { ArtistProfile, ArtistProfileExtra, Track } from "@/lib/types";
 import { AlbumCard } from "./AlbumCard";
 import { TrackRow } from "./TrackRow";
@@ -45,6 +49,8 @@ interface ArtistViewProps {
   currentUserId: string | null;
   currentId: number | null;
   isPlaying: boolean;
+  /** The site origin, so the artist link can be copied with one tap. */
+  site: string;
 }
 
 function initials(name: string): string {
@@ -102,8 +108,21 @@ export function ArtistView({
   currentUserId,
   currentId,
   isPlaying,
+  site,
 }: ArtistViewProps) {
   const [editOpen, setEditOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const handle = claim?.handle || artistHandle(name);
+  const shareLink = artistShareLink(site, name);
+  const copyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(shareLink);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1800);
+    } catch {
+      /* the link is printed on screen anyway */
+    }
+  };
   const artistTracks = useMemo(
     () => tracks.filter((t) => t.artist.toLowerCase() === name.toLowerCase()),
     [tracks, name],
@@ -163,6 +182,34 @@ export function ArtistView({
                 {albums.length === 1 ? "album" : "albums"}
                 {totalMinutes(artistTracks) >= 1 && ` · ${totalMinutes(artistTracks)} min`}
               </span>
+            </div>
+
+            {/* The artist's own permanent link — the thing they share, and the
+                thing that confirms this page is really them. */}
+            <div className="mt-4 flex flex-wrap items-center gap-2">
+              <a
+                href={artistPath(name)}
+                title="This artist's permanent link"
+                className="inline-flex max-w-full items-center gap-1.5 truncate rounded-full border border-border bg-card/70 px-3 py-1.5 text-xs text-muted-foreground transition hover:border-primary/50 hover:text-foreground"
+              >
+                <Link2 className="h-3.5 w-3.5 shrink-0" />
+                <span className="truncate">/artist/{handle}</span>
+              </a>
+              <button
+                onClick={() => void copyLink()}
+                aria-label="Copy this artist's link"
+                className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-xs font-medium transition hover:border-primary/50 hover:text-primary"
+              >
+                {copied ? (
+                  <>
+                    <Check className="h-3.5 w-3.5 text-emerald-400" /> Copied
+                  </>
+                ) : (
+                  <>
+                    <Copy className="h-3.5 w-3.5" /> Copy link
+                  </>
+                )}
+              </button>
             </div>
 
             {status !== "claimed" && (

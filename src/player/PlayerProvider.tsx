@@ -47,11 +47,17 @@ export interface PlayerApi {
    */
   mountVideo: (target: HTMLElement | null) => void;
   /**
-   * Points YouTube's parked player box at `target` (the Now Playing stage).
-   * Pass null to fall back to the small floating thumbnail. The iframe
-   * itself never moves — moving it would restart the song.
+   * Points YouTube's parked player box at `target`.
+   * Pass null to tuck it away. The iframe itself never moves — moving it
+   * would restart the song.
    */
   mountYouTube: (target: HTMLElement | null) => void;
+  /**
+   * Where the video sits: large on the Now Playing screen, large in the page
+   * above the player bar, or as a small thumbnail in the corner.
+   */
+  videoPlacement: VideoPlacement;
+  setVideoPlacement: (placement: VideoPlacement) => void;
   /** True while the current song plays through its attached video. */
   videoMode: boolean;
   /** True when the current song has both audio and an attached video. */
@@ -63,10 +69,22 @@ export interface PlayerApi {
 /** Anything the player can drive: a real media element or YouTube's player. */
 type ActiveMedia = HTMLMediaElement | YouTubeMedia;
 
+/** Where the video is shown while it plays. */
+export type VideoPlacement = "overlay" | "inline" | "corner";
+
 const PlayerContext = createContext<PlayerApi | null>(null);
 
 const VOLUME_KEY = "soul:volume";
 
+
+/**
+ * The play order after the clicked track: everything below it first, then
+ * whatever sits above it. The clicked track itself is placed by the caller.
+ */
+function orderFrom(length: number, start: number): number[] {
+  const indices = Array.from({ length }, (_, i) => i);
+  return [...indices.slice(start + 1), ...indices.slice(0, start)];
+}
 export function PlayerProvider({ children }: { children: ReactNode }) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   if (audioRef.current === null && typeof window !== "undefined") {
@@ -102,6 +120,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const [duration, setDuration] = useState(0);
   // Whether a song that also has an attached video should play through the video.
   const [videoMode, setVideoModeState] = useState(false);
+  // Where the video sits: full player screen, in the page, or a small corner box.
+  const [videoPlacement, setVideoPlacement] = useState<VideoPlacement>("corner");
 
   const current = queue[order[pos] ?? -1] ?? null;
   // Which source plays: YouTube's player, the video element, or the audio element.
@@ -289,10 +309,13 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     }
   }, [playing, current?.rowId, source]);
 
-  // Volume.
+  // Volume. Every element gets both the level and the muted flag — for
+  // YouTube, "muted" is a real player state that only unMute() can lift.
   useEffect(() => {
     for (const el of [audioRef.current, videoElRef.current, ytRef.current]) {
-      if (el) el.volume = muted ? 0 : volume;
+      if (!el) continue;
+      el.volume = volume;
+      el.muted = muted;
     }
     if (!muted) {
       window.localStorage.setItem(VOLUME_KEY, String(volume));
@@ -332,8 +355,11 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const playTracks = useCallback(
     (tracks: Track[], startIndex = 0, opts?: { preferVideo?: boolean }) => {
       if (tracks.length === 0) return;
+      const start = Math.max(0, Math.min(startIndex, tracks.length - 1));
       setQueue(tracks);
-      setOrder(buildOrder(tracks.length, startIndex, shuffle));
+      // The clicked track plays first. Shuffle keeps it first and shuffles the
+      // rest; unshuffled, the order starts at it (so "next" is the one below).
+      setOrder(shuffle ? buildOrder(tracks.length, start, true) : [start, ...orderFrom(tracks.length, start)]);
       setPos(0);
       setPlaying(true);
       // Starting from the videos shelf opens the attached video straight away.
@@ -442,18 +468,34 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     const box = ytHomeRef.current;
     if (!box) return;
     let raf = 0;
+    let lastStyle = "";
     const apply = () => {
       const target = ytStageTargetRef.current;
-      if (target && target.isConnected) {
-        const r = target.getBoundingClientRect();
-        box.style.cssText =
-          `position:fixed;left:${r.left}px;top:${r.top}px;width:${r.width}px;height:${r.height}px;` +
-          `z-index:55;overflow:hidden;border-radius:1rem;pointer-events:auto;`;
+      // Once the YouTube player owns the screen, the iframe fills it edge to edge.
+      const style =
+        target && target.isConnected
+          ? (() => {
+              const r = target.getBoundingClientRect();
+              return (
+                `position:fixed;left:${r.left}px;top:${r.top}px;width:${r.width}px;height:${r.height}px;` +
+                `z-index:55;overflow:hidden;border-radius:1rem;pointer-events:auto;`
+              );
+            })()
+          : "";
+      if (style) {
+        if (style !== lastStyle) {
+          lastStyle = style;
+          box.style.cssText = style;
+        }
       } else {
-        box.style.cssText =
+        const corner =
           "position:fixed;right:1rem;bottom:6rem;width:168px;height:94.5px;z-index:45;" +
           "overflow:hidden;border-radius:0.75rem;box-shadow:0 12px 32px rgba(0,0,0,.45);" +
           "pointer-events:none;";
+        if (corner !== lastStyle) {
+          lastStyle = corner;
+          box.style.cssText = corner;
+        }
       }
     };
     const tick = () => {
@@ -493,6 +535,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       toggleMuted,
       mountVideo,
       mountYouTube,
+      videoPlacement,
+      setVideoPlacement,
       videoMode,
       videoAvailable: hasSongAndVideo(current),
       setVideoMode,
@@ -521,6 +565,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       toggleMuted,
       mountVideo,
       mountYouTube,
+      videoPlacement,
       videoMode,
       setVideoMode,
       current,

@@ -1,5 +1,6 @@
 import functions from "@/lib/shared/kliv-functions.js";
 import type { Track } from "./types";
+import { artistHandle } from "./artistHandle";
 
 /**
  * Reports one play of a catalogue song. Device-imported files (negative row
@@ -18,12 +19,23 @@ export async function recordPlay(track: Pick<Track, "rowId"> | null | undefined)
 /**
  * Resolves a typed artist name to its canonical profile server-side, creating
  * an unclaimed profile only when the name is genuinely new. Returns the
- * canonical spelling, or null when the call could not be made.
+ * canonical spelling and its permanent shareable handle, or null when the call
+ * could not be made.
  */
-export async function ensureArtistProfile(name: string): Promise<string | null> {
+export async function ensureArtistProfile(
+  name: string,
+): Promise<{ name: string; handle: string; created: boolean } | null> {
   try {
-    const res = await functions.post<{ name?: string }>("ensure_artist", { name });
-    return res?.name ?? null;
+    const res = await functions.post<{ name?: string; handle?: string; created?: boolean }>(
+      "ensure_artist",
+      { name },
+    );
+    if (!res?.name) return null;
+    return {
+      name: res.name,
+      handle: res.handle || artistHandle(res.name),
+      created: res.created === true,
+    };
   } catch {
     return null;
   }

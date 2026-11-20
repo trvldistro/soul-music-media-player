@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
   cleanChannelName,
+  isYouTubeResultsPayload,
+  isYouTubeVideoPayload,
   parseISODuration,
   parseYouTubeId,
+  preferOfficialMusic,
   splitVideoTitle,
   youtubeThumbnail,
   youtubeWatchUrl,
@@ -75,5 +78,72 @@ describe("urls", () => {
   it("builds the watch link and thumbnail", () => {
     expect(youtubeWatchUrl("abc")).toBe("https://www.youtube.com/watch?v=abc");
     expect(youtubeThumbnail("abc")).toBe("https://i.ytimg.com/vi/abc/hqdefault.jpg");
+  });
+});
+
+// @kliv-spec-derived — from user intent: "I can't find music, I only find
+// videos": the song itself (YouTube Music's auto-generated Topic audio) must
+// come first, then official VEVO releases, and fan lyric videos / reaction
+// uploads must sink.
+describe("preferOfficialMusic", () => {
+  const topic = { videoId: "a", title: "Aretha Franklin - Respect", channel: "Aretha Franklin - Topic" };
+  const vevo = { videoId: "b", title: "Respect (Official Video)", channel: "ArethaFranklinVEVO" };
+  const fanLyrics = { videoId: "c", title: "Respect LYRICS HD", channel: "SoulFan99" };
+  const reaction = { videoId: "d", title: "Reacting to Respect!!", channel: "ReactBoys" };
+
+  it("puts the official track and VEVO release above fan uploads", () => {
+    const ordered = preferOfficialMusic([fanLyrics, reaction, vevo, topic]);
+    expect(ordered.map((v) => v.videoId)).toEqual(["a", "b", "c", "d"]);
+  });
+
+  it("ranks the Topic studio audio ahead of a VEVO music video", () => {
+    expect(preferOfficialMusic([vevo, topic]).map((v) => v.videoId)).toEqual(["a", "b"]);
+  });
+
+  it("keeps YouTube's own order between equally-official results", () => {
+    const topic2 = { videoId: "e", title: "Respect (Live)", channel: "Aretha Franklin - Topic" };
+    expect(preferOfficialMusic([topic, topic2]).map((v) => v.videoId)).toEqual(["a", "e"]);
+  });
+
+  it("gives a fan lyric video no lift just for the word LYRICS", () => {
+    expect(preferOfficialMusic([fanLyrics, reaction]).map((v) => v.videoId)).toEqual(["c", "d"]);
+  });
+
+  it("accepts an empty list", () => {
+    expect(preferOfficialMusic([])).toEqual([]);
+  });
+});
+
+// @kliv-spec-derived — from user intent: "the Search YouTube box must show the
+// results YouTube returned". The gateway can mislabel a good response as
+// failed, so a complete payload is judged by its own shape.
+describe("YouTube payload recognition", () => {
+  const video = {
+    videoId: "A134hShx_gw",
+    title: "Aretha Franklin - Respect (Official Lyric Video)",
+    channel: "Aretha Franklin",
+    thumbnail: "https://i.ytimg.com/vi/A134hShx_gw/mqdefault.jpg",
+    durationSeconds: 151,
+  };
+
+  it("accepts a real results list", () => {
+    expect(isYouTubeResultsPayload([video, { ...video, videoId: "9iayJ8u4Qew" }])).toBe(true);
+  });
+
+  it("accepts an empty results list", () => {
+    expect(isYouTubeResultsPayload([])).toBe(true);
+  });
+
+  it("rejects anything that isn't a list of complete videos", () => {
+    expect(isYouTubeResultsPayload(undefined)).toBe(false);
+    expect(isYouTubeResultsPayload("results")).toBe(false);
+    expect(isYouTubeResultsPayload([{ title: "no id" }])).toBe(false);
+    expect(isYouTubeResultsPayload([video, { channel: "no id or title" }])).toBe(false);
+  });
+
+  it("recognizes a single video payload for the link lookup", () => {
+    expect(isYouTubeVideoPayload(video)).toBe(true);
+    expect(isYouTubeVideoPayload({ error: "not_found" })).toBe(false);
+    expect(isYouTubeVideoPayload(null)).toBe(false);
   });
 });

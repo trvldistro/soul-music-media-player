@@ -1,12 +1,20 @@
 import { Link } from "react-router-dom";
-import { Heart, Home, ListMusic, LogIn, LogOut, Plus, Search, ShieldCheck, Smartphone, User } from "lucide-react";
+import { Heart, Home, ListMusic, LogIn, LogOut, Mic2, Plus, Search, ShieldCheck, Smartphone, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { Playlist } from "@/lib/types";
 import { isAdminEmail } from "@/lib/admin";
 import { SoulPointsBadge } from "./SoulPointsBadge";
 
-export type View = "home" | "search" | "favorites" | "playlists" | "playlist" | "artist" | "device";
+export type View =
+  | "home"
+  | "search"
+  | "artists"
+  | "favorites"
+  | "playlists"
+  | "playlist"
+  | "artist"
+  | "device";
 
 interface AppSidebarProps {
   view: View;
@@ -24,6 +32,7 @@ interface AppSidebarProps {
 const NAV = [
   { id: "home", label: "Home", icon: Home },
   { id: "search", label: "Search", icon: Search },
+  { id: "artists", label: "Artists", icon: Mic2 },
   { id: "favorites", label: "Favorites", icon: Heart },
   { id: "playlists", label: "Playlists", icon: ListMusic },
   { id: "device", label: "Device storage", icon: Smartphone },

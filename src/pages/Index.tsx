@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { Link } from "react-router-dom";
 import { Heart, Home, Menu, Plus, Search, SearchX } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -17,17 +18,22 @@ import { filterByGenre, groupAlbums, matchesQuery, featuredAlbum, uniqueGenres, 
 import { canEditTrack } from "@/lib/trackEdit";
 import { isAdminEmail } from "@/lib/admin";
 import { selectArtistExtra } from "@/lib/artistProfile";
+import { artistHandle } from "@/lib/artistHandle";
+import { ensureArtistProfile } from "@/lib/plays";
+import { useQueryClient } from "@tanstack/react-query";
 import type { ArtistProfile, Track } from "@/lib/types";
 import { AppSidebar, type View } from "@/components/AppSidebar";
 import { HomeView } from "@/components/HomeView";
 import { PlaylistsView, PlaylistDetail } from "@/components/PlaylistsView";
 import { TrackRow } from "@/components/TrackRow";
 import { PlayerBar } from "@/components/PlayerBar";
+import { InlineNowPlayingVideo } from "@/components/InlineNowPlayingVideo";
 import { NowPlaying } from "@/components/NowPlaying";
 import { MobileNav } from "@/components/MobileNav";
 import { AddYouTubeDialog } from "@/components/AddYouTubeDialog";
 import { EditTrackDialog } from "@/components/EditTrackDialog";
 import { ArtistView } from "@/components/ArtistView";
+import { ArtistsView } from "@/components/ArtistsView";
 import { ClaimArtistDialog } from "@/components/ClaimArtistDialog";
 import { LyricsEditorDialog } from "@/components/LyricsEditorDialog";
 import { useArtistClaims, useArtistExtras, useArtists, useSoulPoints } from "@/lib/queries";
@@ -46,6 +52,9 @@ function SoulApp() {
   const { user, signedIn, signOut } = useAuth();
   const isMobile = useIsMobile();
   const player = usePlayer();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const queryClient = useQueryClient();
 
   const [view, setView] = useState<View>("home");
   const [playlistId, setPlaylistId] = useState<number | null>(null);
@@ -153,6 +162,16 @@ function SoulApp() {
     setAlbumKey(null);
     setGenre(null);
     setView("artist");
+    // The address bar carries the shareable link, so it can be copied from there.
+    const profile = artists.find((a) => a.name.toLowerCase() === name.toLowerCase());
+    navigate(`/artist/${encodeURIComponent(profile?.handle || artistHandle(name))}`);
+  };
+  // Creating an artist goes through the same keeper the upload flow uses — the
+  // browser never writes the artist table itself.
+  const handleCreateArtist = async (name: string) => {
+    const res = await ensureArtistProfile(name);
+    if (res) await queryClient.invalidateQueries({ queryKey: ["artists"] });
+    return res;
   };
   const handleRemoveTrack = (track: Track) => {
     if (currentId === track.rowId) return;
@@ -170,13 +189,37 @@ function SoulApp() {
         claimEvidence: "",
         claimLink: "",
         claimedAt: null,
+        handle: row?.handle ?? artistHandle(name),
+        aliases: [],
       };
     }
     return row;
   };
 
+  // Deep-link arrivals: a shared link (/artist/<handle>) is the source of truth.
+  const routeHandle = location.pathname.startsWith("/artist/")
+    ? decodeURIComponent(location.pathname.slice("/artist/".length))
+    : null;
+  const routeArtist = useMemo(() => {
+    if (!routeHandle) return null;
+    const h = routeHandle.toLowerCase();
+    return (
+      artists.find((a) => (a.handle || artistHandle(a.name)).toLowerCase() === h) ??
+      artists.find((a) => artistHandle(a.name) === h) ?? null
+    );
+  }, [routeHandle, artists]);
+  useEffect(() => {
+    if (routeHandle && routeArtist) {
+      setArtistName(routeArtist.name);
+      setAlbumKey(null);
+      setGenre(null);
+      setView("artist");
+    }
+  }, [routeHandle, routeArtist]);
+
   const selectedAlbum = albumKey ? albums.find((a) => a.key === albumKey) ?? null : null;
   const selectedPlaylist = playlistId ? playlists.find((p) => p.rowId === playlistId) ?? null : null;
+  const site = `${window.location.protocol}//${window.location.host}`;
 
   return (
     <div className="flex min-h-screen">
@@ -186,6 +229,7 @@ function SoulApp() {
           onSelectView={(v) => {
             setView(v);
             setPlaylistId(null);
+            if (location.pathname.startsWith("/artist/")) navigate("/");
           }}
           playlists={playlists}
           activePlaylistId={playlistId}
@@ -230,6 +274,7 @@ function SoulApp() {
               onSelectView={(v) => {
                 setView(v);
                 setPlaylistId(null);
+                if (location.pathname.startsWith("/artist/")) navigate("/");
               }}
               onUpload={() => setUploadOpen(true)}
               isAdmin={isAdminEmail(user?.email as string | undefined)}
@@ -373,6 +418,16 @@ function SoulApp() {
             </div>
           )}
 
+          {view === "artists" && (
+            <ArtistsView
+              artists={artists}
+              tracks={tracks}
+              site={site}
+              onOpenArtist={handleOpenArtist}
+              onCreateArtist={handleCreateArtist}
+            />
+          )}
+
           {view === "favorites" && (
             <div className="space-y-8">
               <div>
@@ -476,7 +531,9 @@ function SoulApp() {
               onBack={() => {
                 setArtistName(null);
                 setView("home");
+                if (location.pathname.startsWith("/artist/")) navigate("/");
               }}
+              site={site}
               onPlayTracks={handlePlayTracks}
               onPlayAlbum={handlePlayAlbum}
               onOpenAlbum={handleOpenAlbum}
@@ -493,6 +550,10 @@ function SoulApp() {
           )}
         </main>
       </div>
+
+      {/* The video plays here, large, above the controls — while the full
+          player screen is closed. The page keeps its own place underneath. */}
+      <InlineNowPlayingVideo visible={!nowPlayingOpen} />
 
       <PlayerBar
         favorite={player.current ? favorites.has(player.current.rowId) : false}

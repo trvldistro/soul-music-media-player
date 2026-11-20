@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useSubmitArtistClaim } from "@/lib/queries";
+import { notifyTeamEmail } from "@/lib/teamNotify";
 
 interface ClaimArtistDialogProps {
   /** Artist name to claim; null closes the dialog. */
@@ -52,6 +53,13 @@ export function ClaimArtistDialog({ artistName, reclaim = false, onOpenChange }:
         onSuccess: (result) => {
           if (result.outcome === "succeeded") {
             setDone(true);
+            // Email the team — the claim waits for review in the dashboard.
+            void notifyTeamEmail("artist_claim", {
+              artist: artistName,
+              type: reclaim ? "Re-claim after a rejection" : "First claim",
+              evidence: evidence.trim(),
+              proofLink: linkTrimmed,
+            });
           } else if (result.code === "Conflict") {
             toast.error("A claim for this artist is already filed or in review.");
           } else {

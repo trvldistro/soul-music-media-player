@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
 import { ChevronDown, Clapperboard, Music2, Pause, Play, Repeat, Repeat1, Shuffle, SkipBack, SkipForward, Youtube } from "lucide-react";
 import { Slider } from "@/components/ui/slider";
 import { formatDuration } from "@/lib/format";
@@ -8,6 +8,7 @@ import { songCode } from "@/lib/songCode";
 import { usePlayer } from "@/player/PlayerProvider";
 import type { Track } from "@/lib/types";
 import { LyricsPanel } from "./LyricsPanel";
+import { NowPlayingVideo } from "./NowPlayingScreen";
 import { VinylDisc } from "./VinylDisc";
 import { Visualizer } from "./Visualizer";
 
@@ -26,25 +27,14 @@ export function NowPlaying({ open, onClose, signedIn, onAddLyrics }: NowPlayingP
   const source = t ? pickSource(t, p.videoMode) : "audio";
   const showVideo = source === "video";
   const showYouTube = source === "youtube";
-  const videoMountRef = useRef<HTMLDivElement | null>(null);
-  const mountVideo = p.mountVideo;
+  const showVideoNow = showVideo || showYouTube;
+  const setVideoPlacement = p.setVideoPlacement;
 
-  // Borrow the player's shared <video> element while a music video is on screen.
+  // The video lives large on this screen while it is open.
   useEffect(() => {
-    if (!open || !showVideo) return;
-    mountVideo(videoMountRef.current);
-    return () => mountVideo(null);
-  }, [open, showVideo, mountVideo, t?.rowId]);
-
-  // YouTube's player is styled over this placeholder, not moved into it —
-  // moving the iframe would restart the song.
-  const ytStageRef = useRef<HTMLDivElement | null>(null);
-  const mountYouTube = p.mountYouTube;
-  useEffect(() => {
-    if (!open || !showYouTube) return;
-    mountYouTube(ytStageRef.current);
-    return () => mountYouTube(null);
-  }, [open, showYouTube, mountYouTube, t?.rowId]);
+    if (!open || !showVideoNow) return;
+    setVideoPlacement("overlay");
+  }, [open, showVideoNow, setVideoPlacement, t?.rowId]);
 
   if (!open || !t) return null;
 
@@ -82,20 +72,9 @@ export function NowPlaying({ open, onClose, signedIn, onAddLyrics }: NowPlayingP
 
           {/* Music video player, or cover + spinning vinyl */}
           <div className="mt-8 flex justify-center">
-            {showVideo ? (
-              <div
-                ref={videoMountRef}
-                data-testid="video-stage"
-                role="region"
-                aria-label="Music video"
-                className="relative aspect-video w-full max-w-2xl overflow-hidden rounded-2xl bg-black shadow-2xl shadow-black/70"
-              />
-            ) : showYouTube ? (
-              <div
-                ref={ytStageRef}
-                data-testid="youtube-stage"
-                role="region"
-                aria-label="YouTube video"
+            {showVideoNow ? (
+              <NowPlayingVideo
+                track={t}
                 className="relative aspect-video w-full max-w-2xl overflow-hidden rounded-2xl bg-black shadow-2xl shadow-black/70"
               />
             ) : (

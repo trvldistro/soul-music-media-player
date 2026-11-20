@@ -34,9 +34,22 @@ describe("recordPlay", () => {
 });
 
 describe("ensureArtistProfile", () => {
-  it("returns the server's canonical spelling", async () => {
-    post.mockResolvedValueOnce({ name: "Lil L33" });
-    await expect(ensureArtistProfile("lil l33")).resolves.toBe("Lil L33");
+  it("returns the server's canonical spelling and its shareable handle", async () => {
+    post.mockResolvedValueOnce({ name: "Lil L33", handle: "lil-l33", created: false });
+    await expect(ensureArtistProfile("lil l33")).resolves.toEqual({
+      name: "Lil L33",
+      handle: "lil-l33",
+      created: false,
+    });
+  });
+
+  it("falls back to a locally built handle when the server sends none", async () => {
+    post.mockResolvedValueOnce({ name: "New Act" });
+    await expect(ensureArtistProfile("New Act")).resolves.toEqual({
+      name: "New Act",
+      handle: "new-act",
+      created: false,
+    });
   });
 
   it("returns null instead of throwing when the call fails", async () => {

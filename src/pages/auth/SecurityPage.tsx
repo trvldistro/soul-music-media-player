@@ -570,7 +570,7 @@ const SecurityPage = () => {
             <div className="space-y-4">
               <div className="flex justify-center p-4 bg-white rounded-lg border">
                 <img
-                  src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(totpEnrollment.otpauthUri)}`}
+                  src={totpEnrollment.qrCodeDataUri}
                   alt="QR Code"
                   className="w-48 h-48"
                 />

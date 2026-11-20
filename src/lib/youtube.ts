@@ -62,3 +62,43 @@ export function splitVideoTitle(raw: string, channel: string): { title: string; 
   }
   return { artist: cleanChannelName(channel), title: cleaned };
 }
+
+/** A single video as the YouTube bridge returns it. */
+export interface YouTubeVideoPayload {
+  videoId: string;
+  title: string;
+  channel: string;
+  thumbnail: string;
+  durationSeconds: number;
+}
+
+export function isYouTubeVideoPayload(v: unknown): v is YouTubeVideoPayload {
+  const row = v as YouTubeVideoPayload;
+  return typeof row?.videoId === "string" && typeof row?.title === "string";
+}
+
+/** A complete results list — what a search response must carry to be usable. */
+export function isYouTubeResultsPayload(value: unknown): value is YouTubeVideoPayload[] {
+  return Array.isArray(value) && value.every(isYouTubeVideoPayload);
+}
+
+/**
+ * Ranks the music fans actually want to hear above everything else:
+ * YouTube Music's auto-generated "Artist - Topic" tracks come first — album
+ * art and clean studio audio, i.e. the song itself — then VEVO and other
+ * official releases. Fan lyric videos, live rips and reaction uploads score
+ * nothing and sink to the bottom. Order is otherwise stable.
+ */
+export function preferOfficialMusic<T extends { title: string; channel: string }>(videos: T[]): T[] {
+  const score = (v: T): number => {
+    let s = 0;
+    if (/-\s*topic$/i.test(v.channel)) s += 6;
+    if (/vevo$/i.test(v.channel)) s += 3;
+    if (/official/i.test(v.title) || /official/i.test(v.channel)) s += 2;
+    return s;
+  };
+  return videos
+    .map((v, i) => ({ v, i, s: score(v) }))
+    .sort((a, b) => b.s - a.s || a.i - b.i)
+    .map((x) => x.v);
+}
